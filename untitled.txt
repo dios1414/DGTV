@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DG TV</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #080808;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* ENCABEZADO */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #080808;
+  padding: 18px 22px;
+  border-bottom: 2px solid #e00000;
+}
+
+.logo {
+  color: #ff2222;
+  font-size: 30px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+#buscador {
+  width: 100%;
+  max-width: 500px;
+  padding: 13px 16px;
+  border: 2px solid #333;
+  border-radius: 8px;
+  background: #151515;
+  color: white;
+  font-size: 16px;
+  outline: none;
+}
+
+#buscador:focus {
+  border-color: #00bfff;
+}
+
+/* CONTENEDOR */
+#contenido {
+  padding: 18px;
+}
+
+.categoria {
+  margin-bottom: 28px;
+}
+
+.titulo-categoria {
+  color: #ff2222;
+  font-size: 21px;
+  font-weight: bold;
+  margin: 10px 0 14px;
+  border-left: 5px solid #ff2222;
+  padding-left: 10px;
+}
+
+/* GRILLA */
+.canales {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  gap: 14px;
+}
+
+/* TARJETA */
+.canal {
+  min-height: 145px;
+  background: #141414;
+  border: 2px solid #292929;
+  border-radius: 10px;
+  padding: 10px;
+  cursor: pointer;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  transition: transform .12s, border-color .12s;
+  outline: none;
+}
+
+.canal:hover,
+.canal:focus,
+.canal.seleccionado {
+  border-color: #00bfff;
+  transform: scale(1.04);
+}
+
+.canal img {
+  width: 115px;
+  height: 80px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
+
+.nombre {
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+/* MENSAJES */
+.mensaje {
+  text-align: center;
+  padding: 50px 20px;
+  color: #aaa;
+  font-size: 17px;
+}
+
+/* REPRODUCTOR */
+#reproductor {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: #000;
+  padding: 15px;
+}
+
+#video {
+  width: 100%;
+  height: calc(100vh - 75px);
+  background: #000;
+  object-fit: contain;
+}
+
+#barraVideo {
+  height: 55px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#tituloVideo {
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#cerrar {
+  border: 2px solid #444;
+  background: #171717;
+  color: white;
+  padding: 9px 18px;
+  border-radius: 7px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+#cerrar:focus {
+  border-color: #00bfff;
+}
+
+/* CELULAR */
+@media (max-width: 600px) {
+  .canales {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .canal {
+    min-height: 135px;
+  }
+
+  .canal img {
+    width: 100px;
+    height: 70px;
+  }
+
+  .logo {
+    font-size: 26px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div class="logo">DG TV</div>
+
+  <input
+    id="buscador"
+    type="search"
+    placeholder="🔎 Buscar canal..."
+    autocomplete="off"
+  >
+</header>
+
+<main id="contenido">
+  <div class="mensaje">Cargando canales...</div>
+</main>
+
+<!-- REPRODUCTOR -->
+<section id="reproductor">
+  <video id="video" controls autoplay playsinline></video>
+
+  <div id="barraVideo">
+    <div id="tituloVideo">DG TV</div>
+
+    <button id="cerrar" tabindex="0">
+      ✕ Cerrar
+    </button>
+  </div>
+</section>
+
+<script>
+
+/* =====================================================
+   ÚNICA COSA QUE TENÉS QUE CAMBIAR
+   ===================================================== */
+
+const M3U_URL = "https://bit.ly/4ydeAZ8  ";
+
+
+/* =====================================================
+   VARIABLES
+   ===================================================== */
+
+let canales = [];
+let indiceSeleccionado = 0;
+
+
+/* =====================================================
+   CARGAR M3U
+   ===================================================== */
+
+async function cargarM3U() {
+
+  const contenido = document.getElementById("contenido");
+
+  try {
+
+    const respuesta = await fetch(M3U_URL, {
+      cache: "no-store"
+    });
+
+    if (!respuesta.ok) {
+      throw new Error("No se pudo descargar la lista");
+    }
+
+    const texto = await respuesta.text();
+
+    canales = analizarM3U(texto);
+
+    if (!canales.length) {
+      contenido.innerHTML =
+        '<div class="mensaje">No se encontraron canales.</div>';
+      return;
+    }
+
+    mostrarCanales(canales);
+
+  } catch (error) {
+
+    console.error(error);
+
+    contenido.innerHTML = `
+      <div class="mensaje">
+        No se pudo cargar la lista M3U.<br><br>
+        Revisá la URL y que el servidor permita CORS.
+      </div>
+    `;
+  }
+}
+
+
+/* =====================================================
+   ANALIZAR M3U
+   ===================================================== */
+
+function analizarM3U(texto) {
+
+  const lineas = texto
+    .split(/\r?\n/)
+    .map(x => x.trim())
+    .filter(Boolean);
+
+  const resultado = [];
+
+  for (let i = 0; i < lineas.length; i++) {
+
+    if (!lineas[i].startsWith("#EXTINF")) {
+      continue;
+    }
+
+    const info = lineas[i];
+
+    let url = "";
+
+    for (let j = i + 1; j < lineas.length; j++) {
+
+      if (
+        lineas[j] &&
+        !lineas[j].startsWith("#")
+      ) {
+        url = lineas[j];
+        break;
+      }
+    }
+
+    if (!url) continue;
+
+    const nombreParte = info.substring(
+      info.lastIndexOf(",") + 1
+    ).trim();
+
+    const grupoMatch = info.match(
+      /group-title="([^"]*)"/i
+    );
+
+    const logoMatch = info.match(
+      /tvg-logo="([^"]*)"/i
+    );
+
+    const nombreMatch = info.match(
+      /tvg-name="([^"]*)"/i
+    );
+
+    resultado.push({
+      nombre: nombreMatch?.[1] || nombreParte || "Canal",
+      grupo: grupoMatch?.[1] || "Canales",
+      logo: logoMatch?.[1] || "",
+      url: url
+    });
+  }
+
+  return resultado;
+}
+
+
+/* =====================================================
+   MOSTRAR CANALES
+   ===================================================== */
+
+function mostrarCanales(lista) {
+
+  const contenido = document.getElementById("contenido");
+
+  contenido.innerHTML = "";
+
+  const grupos = {};
+
+  lista.forEach(canal => {
+
+    if (!grupos[canal.grupo]) {
+      grupos[canal.grupo] = [];
+    }
+
+    grupos[canal.grupo].push(canal);
+  });
+
+
+  Object.keys(grupos).forEach(grupo => {
+
+    const categoria = document.createElement("section");
+    categoria.className = "categoria";
+
+    const titulo = document.createElement("div");
+    titulo.className = "titulo-categoria";
+    titulo.textContent = grupo;
+
+    const canalesDiv = document.createElement("div");
+    canalesDiv.className = "canales";
+
+
+    grupos[grupo].forEach(canal => {
+
+      const tarjeta = document.createElement("div");
+
+      tarjeta.className = "canal";
+      tarjeta.tabIndex = 0;
+
+
+      if (canal.logo) {
+
+        const img = document.createElement("img");
+
+        img.src = canal.logo;
+        img.alt = canal.nombre;
+
+        img.onerror = function() {
+          this.style.display = "none";
+        };
+
+        tarjeta.appendChild(img);
+      }
+
+
+      const nombre = document.createElement("div");
+
+      nombre.className = "nombre";
+      nombre.textContent = canal.nombre;
+
+      tarjeta.appendChild(nombre);
+
+
+      tarjeta.addEventListener("click", () => {
+        reproducir(canal);
+      });
+
+
+      tarjeta.addEventListener("keydown", event => {
+
+        if (
+          event.key === "Enter" ||
+          event.key === " "
+        ) {
+          event.preventDefault();
+          reproducir(canal);
+        }
+
+      });
+
+
+      canalesDiv.appendChild(tarjeta);
+
+    });
+
+
+    categoria.appendChild(titulo);
+    categoria.appendChild(canalesDiv);
+
+    contenido.appendChild(categoria);
+
+  });
+
+
+  activarNavegacionTV();
+}
+
+
+/* =====================================================
+   REPRODUCTOR
+   ===================================================== */
+
+function reproducir(canal) {
+
+  const reproductor =
+    document.getElementById("reproductor");
+
+  const video =
+    document.getElementById("video");
+
+  const titulo =
+    document.getElementById("tituloVideo");
+
+
+  titulo.textContent = canal.nombre;
+
+  video.src = canal.url;
+
+  reproductor.style.display = "block";
+
+  video.play().catch(() => {});
+
+}
+
+
+/* =====================================================
+   CERRAR REPRODUCTOR
+   ===================================================== */
+
+function cerrarReproductor() {
+
+  const reproductor =
+    document.getElementById("reproductor");
+
+  const video =
+    document.getElementById("video");
+
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+
+  reproductor.style.display = "none";
+}
+
+
+document
+  .getElementById("cerrar")
+  .addEventListener("click", cerrarReproductor);
+
+
+/* =====================================================
+   BOTÓN ATRÁS / ESC
+   ===================================================== */
+
+document.addEventListener("keydown", event => {
+
+  if (event.key === "Escape" || event.key === "Backspace") {
+
+    const reproductor =
+      document.getElementById("reproductor");
+
+    if (reproductor.style.display === "block") {
+
+      cerrarReproductor();
+
+    }
+
+  }
+
+});
+
+
+/* =====================================================
+   BUSCADOR
+   ===================================================== */
+
+document
+  .getElementById("buscador")
+  .addEventListener("input", function() {
+
+    const texto =
+      this.value.toLowerCase().trim();
+
+    if (!texto) {
+
+      mostrarCanales(canales);
+      return;
+
+    }
+
+    const filtrados = canales.filter(canal =>
+
+      canal.nombre
+        .toLowerCase()
+        .includes(texto) ||
+
+      canal.grupo
+        .toLowerCase()
+        .includes(texto)
+
+    );
+
+    mostrarCanales(filtrados);
+
+  });
+
+
+/* =====================================================
+   NAVEGACIÓN CON CONTROL
+   ===================================================== */
+
+function activarNavegacionTV() {
+
+  const tarjetas =
+    Array.from(document.querySelectorAll(".canal"));
+
+  if (!tarjetas.length) return;
+
+  tarjetas.forEach((tarjeta, indice) => {
+
+    tarjeta.addEventListener("focus", () => {
+
+      indiceSeleccionado = indice;
+
+      tarjetas.forEach(t =>
+        t.classList.remove("seleccionado")
+      );
+
+      tarjeta.classList.add("seleccionado");
+
+    });
+
+  });
+
+
+  tarjetas[0].focus();
+}
+
+
+/* =====================================================
+   INICIAR
+   ===================================================== */
+
+cargarM3U();
+
+</script>
+
+</body>
+</html>
