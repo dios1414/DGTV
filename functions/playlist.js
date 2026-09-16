@@ -1,5 +1,5 @@
 export async function onRequest() {
-  const M3U_URL = "https://bit.ly/4ydeAZ8";
+  const M3U_URL = "/playlist";;
 
   try {
     const respuesta = await fetch(M3U_URL);
